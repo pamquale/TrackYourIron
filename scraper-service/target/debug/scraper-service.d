@@ -1,0 +1,1 @@
+/Users/annatkach/RustroverProjects/TrackYourIron/scraper-service/target/debug/scraper-service: /Users/annatkach/RustroverProjects/TrackYourIron/scraper-service/src/http_client.rs /Users/annatkach/RustroverProjects/TrackYourIron/scraper-service/src/main.rs
