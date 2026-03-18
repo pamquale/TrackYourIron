@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # Брокер сообщений NATS (Связующее звено между Аней, Глебом и тобой)
+  nats:
+    image: nats:alpine
+    container_name: iron_nats
+    ports:
+      - "4222:4222" # Основной порт для общения микросервисов (TCP)
+      - "8222:8222" # Порт для мониторинга (можно будет зайти в браузер и посмотреть статусы)
+    command: "-m 8222"
+    restart: always
+
+  # База данных PostgreSQL (Для парсера Ани и твоего бота)
+  postgres:
+    image: postgres:15-alpine
+    container_name: iron_postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: iron_db
+    ports:
+      - "5432:5432" # Порт для подключения к БД (для sqlx, asyncpg)
+    volumes:
+      # Этот пункт берет файл Ильи (init.sql) из папки проекта
+      # и автоматически создает таблицы при первом запуске базы
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
