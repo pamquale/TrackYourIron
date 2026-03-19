@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 router = Router()
 
 _VALID_URL_RE = re.compile(
-    r"https?://(?:www\.)?(?:telemart\.ua|rozetka\.com\.ua)/\S+",
+    r"https?://(?:www\.)?(?:telemart\.ua)/\S+",
     re.IGNORECASE,
 )
 
@@ -43,7 +43,7 @@ async def cb_add_tracker(callback: types.CallbackQuery, state: FSMContext) -> No
     await callback.answer()
     await state.set_state(TrackerState.waiting_for_url)
     await callback.message.answer(
-        "Send a direct link to the product (Telemart / Rozetka)."
+        "Send a direct link to the product (Telemart)."
     )
 
 
@@ -109,7 +109,7 @@ async def on_product_url(message: types.Message, state: FSMContext) -> None:
 
     if not _VALID_URL_RE.match(url):
         await message.answer(
-            "Invalid link. Supported: Telemart and Rozetka.\n"
+            "Invalid link. Supported: Telemart.\n"
             "Try again or send /start to cancel."
         )
         return
