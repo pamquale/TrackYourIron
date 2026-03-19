@@ -30,8 +30,8 @@ async def cmd_start(message: types.Message, state: FSMContext) -> None:
     await state.clear()
     await db.upsert_user(message.from_user.id, message.from_user.full_name)
     await message.answer(
-        "Привет! Я помогу отслеживать цены на комплектующие.\n"
-        "Выбери действие в меню:",
+        "Hello! I can help you track component prices.\n"
+        "Choose an action from the menu:",
         reply_markup=start_kb,
     )
 
@@ -43,7 +43,7 @@ async def cb_add_tracker(callback: types.CallbackQuery, state: FSMContext) -> No
     await callback.answer()
     await state.set_state(TrackerState.waiting_for_url)
     await callback.message.answer(
-        "Пришли прямую ссылку на товар (Telemart / Rozetka)."
+        "Send a direct link to the product (Telemart / Rozetka)."
     )
 
 
@@ -52,11 +52,11 @@ async def cb_add_tracker(callback: types.CallbackQuery, state: FSMContext) -> No
 @router.message(Command("help"))
 async def cmd_help(message: types.Message) -> None:
     text = (
-        "🤖 **Доступные команды:**\n\n"
-        "/start - Главное меню\n"
-        "/help - Справка\n"
-        "/add - Добавить товар\n"
-        "/list - Мои подписки\n"
+        "🤖 **Available commands:**\n\n"
+        "/start - Main menu\n"
+        "/help - Help\n"
+        "/add - Add product\n"
+        "/list - My subscriptions\n"
     )
     await message.answer(text, parse_mode="Markdown")
 
@@ -67,7 +67,7 @@ async def cmd_help(message: types.Message) -> None:
 async def cmd_add(message: types.Message, state: FSMContext) -> None:
     await state.set_state(TrackerState.waiting_for_url)
     await message.answer(
-        "Пришли прямую ссылку на товар."
+        "Send a direct link to the product."
     )
 
 
@@ -76,15 +76,15 @@ async def cmd_add(message: types.Message, state: FSMContext) -> None:
 async def show_list(message: types.Message, user_id: int):
     follows = await db.get_user_follows(user_id)
     if not follows:
-        await message.answer("Список отслеживания пуст.")
+        await message.answer("Tracking list is empty.")
         return
 
-    lines = ["📋 <b>Ваши подписки:</b>\n"]
+    lines = ["📋 <b>Your subscriptions:</b>\n"]
     for i, f in enumerate(follows, start=1):
         mode_str = "Auto 🔔" if f["mode"] == "auto" else f"Target (< {f['set_price']}) 🎯"
         # Truncate long names
         name = f["name"][:50] + "..." if len(f["name"]) > 50 else f["name"]
-        lines.append(f"{i}. <a href='{f['link']}'>{name}</a>\n   Режим: {mode_str}")
+        lines.append(f"{i}. <a href='{f['link']}'>{name}</a>\n   Mode: {mode_str}")
 
     text = "\n\n".join(lines)
     await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
@@ -109,14 +109,14 @@ async def on_product_url(message: types.Message, state: FSMContext) -> None:
 
     if not _VALID_URL_RE.match(url):
         await message.answer(
-            "Ссылка не подходит. Поддерживаются Telemart и Rozetka.\n"
-            "Попробуй снова или отправь /start для отмены."
+            "Invalid link. Supported: Telemart and Rozetka.\n"
+            "Try again or send /start to cancel."
         )
         return
 
-    msg = await message.answer("⏳ Получаю данные о товаре...")
+    msg = await message.answer("⏳ Fetching product data...")
 
-    # Запрос к Scraper Service
+    # Request to Scraper Service
     try:
         product = await scraper_client.add_product(url)
     except Exception as e:
@@ -125,7 +125,7 @@ async def on_product_url(message: types.Message, state: FSMContext) -> None:
 
     if product is None:
         await msg.edit_text(
-            "Не удалось получить данные о товаре. Проверьте ссылку."
+            "Failed to get product data. Check the link."
         )
         await state.clear()
         return
@@ -134,16 +134,16 @@ async def on_product_url(message: types.Message, state: FSMContext) -> None:
 
     product_id = product["id"]
     current_price = product.get("current_price") or 0
-    name = product.get("name", "Товар")
+    name = product.get("name", "Product")
 
-    # Проверка дубликатов
+    # Check duplicates
     exists = await db.check_follow_exists(message.from_user.id, product_id)
     
     warning_text = ""
     if exists:
-        warning_text = "⚠️ <b>Вы уже отслеживаете этот товар.</b>\nНастройки будут обновлены.\n\n"
+        warning_text = "⚠️ <b>You are already tracking this product.</b>\nSettings will be updated.\n\n"
 
-    # Сохраняем в State
+    # Save to State
     current_price_dec = Decimal(str(current_price)) if current_price is not None else Decimal(0)
 
     await state.update_data(
@@ -157,8 +157,8 @@ async def on_product_url(message: types.Message, state: FSMContext) -> None:
     text = (
         f"{warning_text}"
         f"📦 <b>{name}</b>\n"
-        f"💰 Текущая цена: {current_price_dec} грн.\n\n"
-        "Выберите режим отслеживания:"
+        f"💰 Current price: {current_price_dec} UAH.\n\n"
+        "Choose tracking mode:"
     )
     await message.answer(text, reply_markup=mode_kb, parse_mode="HTML")
 
@@ -174,7 +174,7 @@ async def on_mode_auto(callback: types.CallbackQuery, state: FSMContext) -> None
     await state.clear()
     
     await callback.message.edit_text(
-        f"✅ Товар <b>{data['product_name']}</b> добавлен в отслеживание (Режим: Auto).",
+        f"✅ Product <b>{data['product_name']}</b> added to tracking (Mode: Auto).",
         parse_mode="HTML"
     )
     await callback.answer()
@@ -189,15 +189,15 @@ async def on_mode_target(callback: types.CallbackQuery, state: FSMContext) -> No
     curr = data.get("current_price", 0)
     
     await callback.message.edit_text(
-        f"Текущая цена: {curr} грн.\n"
-        "Введите целевую цену (число), при которой нужно уведомить:"
+        f"Current price: {curr} UAH.\n"
+        "Enter target price (number), below which to notify:"
     )
 
 
 @router.callback_query(TrackerState.waiting_for_mode, F.data == "cancel_add")
 async def on_cancel_mode(callback: types.CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("❌ Добавление отменено.")
+    await callback.message.edit_text("❌ Add cancelled.")
     await callback.answer()
 
 
@@ -211,7 +211,7 @@ async def on_price_input(message: types.Message, state: FSMContext) -> None:
         if price <= 0:
             raise ValueError
     except (InvalidOperation, ValueError):
-        await message.answer("Пожалуйста, введите корректное положительное число.")
+        await message.answer("Please enter a valid positive number.")
         return
 
     data = await state.get_data()
@@ -222,8 +222,8 @@ async def on_price_input(message: types.Message, state: FSMContext) -> None:
     await state.clear()
     
     await message.answer(
-        f"✅ Подписка оформлена!\n"
-        f"Товар: <b>{name}</b>\n"
-        f"Уведомим, когда цена станет ниже {price} грн.",
+        f"✅ Subscription set!\n"
+        f"Product: <b>{name}</b>\n"
+        f"Will notify when price is below {price} UAH.",
         parse_mode="HTML"
     )

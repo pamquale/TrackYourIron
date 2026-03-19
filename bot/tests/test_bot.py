@@ -26,7 +26,7 @@ async def test_cmd_start():
         state.clear.assert_called_once()
         mock_upsert.assert_called_once_with(123, "Test User")
         message.answer.assert_called_once()
-        assert "Привет!" in message.answer.call_args[0][0]
+        assert "Hello!" in message.answer.call_args[0][0]
 
 @pytest.mark.asyncio
 async def test_cmd_help():
@@ -65,8 +65,7 @@ async def test_cmd_add():
 
     state.set_state.assert_called_once_with(TrackerState.waiting_for_url)
     message.answer.assert_called_once()
-    # Use 'Telemart' because it's in the response string
-    assert "Telemart" in message.answer.call_args[0][0]
+    assert "link" in message.answer.call_args[0][0]
 
 @pytest.mark.asyncio
 async def test_cmd_list():
