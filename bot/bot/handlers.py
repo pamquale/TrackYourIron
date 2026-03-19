@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from aiogram import F, Router, types
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards import start_kb, mode_kb
 from bot.states import TrackerState
@@ -38,6 +39,12 @@ async def cb_add_tracker(callback: types.CallbackQuery, state: FSMContext) -> No
     await callback.answer()
     await state.set_state(TrackerState.waiting_for_url)
     await callback.message.answer("Send a direct link to the product (Telemart).")
+
+
+@router.callback_query(F.data == "list_trackers")
+async def cb_list_trackers(callback: types.CallbackQuery) -> None:
+    await callback.answer()
+    await show_list(callback.message, callback.from_user.id)
 
 @router.message(Command("help"))
 async def cmd_help(message: types.Message) -> None:
@@ -78,7 +85,13 @@ async def show_list(message: types.Message, user_id: int):
             lines.append(f"{i}. <a href='{link}'>{name}</a>\n   Mode: {mode_str}")
 
         text = "\n\n".join(lines)
-        await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
+        remove_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=f"❌ Remove #{i}", callback_data=f"remove_follow:{f['product_id']}")]
+                for i, f in enumerate(follows, start=1)
+            ]
+        )
+        await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=remove_kb)
     except Exception as e:
         log.error(f"Error showing list: {e}")
         await message.answer(" Error retrieving your list. Please try again later.")
@@ -86,6 +99,25 @@ async def show_list(message: types.Message, user_id: int):
 @router.message(Command("list"))
 async def cmd_list(message: types.Message) -> None:
     await show_list(message, message.from_user.id)
+
+
+@router.callback_query(F.data.startswith("remove_follow:"))
+async def cb_remove_follow(callback: types.CallbackQuery) -> None:
+    await callback.answer()
+    product_id_raw = callback.data.split(":", 1)[1]
+
+    if not product_id_raw.isdigit():
+        await callback.message.answer("Invalid product id.")
+        return
+
+    product_id = int(product_id_raw)
+    removed = await db.delete_follow(callback.from_user.id, product_id)
+    if removed:
+        await callback.message.answer("Product removed from your tracking list.")
+    else:
+        await callback.message.answer("Product not found in your tracking list.")
+
+    await show_list(callback.message, callback.from_user.id)
 
 @router.message(TrackerState.waiting_for_url, F.text)
 async def process_url(message: types.Message, state: FSMContext) -> None:

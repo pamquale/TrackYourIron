@@ -71,13 +71,23 @@ async def get_user_follows(user_id: int) -> list[asyncpg.Record]:
     pool = await get_pool()
     return await pool.fetch(
         """
-        SELECT f.product_name as name, f.product_link as link, f.mode, f.set_price
+        SELECT f.product_id, f.product_name as name, f.product_link as link, f.mode, f.set_price
         FROM notifier_db.follows f
         WHERE f.user_id = $1
         ORDER BY f.product_name ASC
         """,
         user_id,
     )
+
+
+async def delete_follow(user_id: int, product_id: int) -> bool:
+    pool = await get_pool()
+    result = await pool.execute(
+        "DELETE FROM notifier_db.follows WHERE user_id = $1 AND product_id = $2",
+        user_id,
+        product_id,
+    )
+    return result == "DELETE 1"
 
 
 async def check_follow_exists(user_id: int, product_id: int) -> bool:

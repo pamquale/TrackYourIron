@@ -1,7 +1,15 @@
 ﻿import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from aiogram import types
-from bot.handlers import cmd_start, cmd_help, cb_add_tracker, cmd_add, cmd_list
+from bot.handlers import (
+    cmd_start,
+    cmd_help,
+    cb_add_tracker,
+    cb_list_trackers,
+    cb_remove_follow,
+    cmd_add,
+    cmd_list,
+)
 from bot.states import TrackerState
 
 @pytest.mark.asyncio
@@ -78,10 +86,55 @@ async def test_cmd_list():
     # Mock DB call
     with patch('bot.handlers.db.get_user_follows', new_callable=AsyncMock) as mock_get:
         mock_get.return_value = [
-            {"name": "Test Product", "link": "http://test.com", "mode": "auto", "set_price": 0}
+            {"product_id": 7, "name": "Test Product", "link": "http://test.com", "mode": "auto", "set_price": 0}
         ]
         await cmd_list(message)
 
         message.answer.assert_called_once()
         assert "Test Product" in message.answer.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_cb_list_trackers():
+    callback = AsyncMock(spec=types.CallbackQuery)
+    callback.answer = AsyncMock()
+    callback_message = AsyncMock(spec=types.Message)
+    callback_message.answer = AsyncMock()
+    callback.message = callback_message
+    user = MagicMock()
+    user.id = 321
+    callback.from_user = user
+
+    with patch('bot.handlers.db.get_user_follows', new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = [
+            {"product_id": 11, "name": "GPU", "link": "http://test.com/1", "mode": "auto", "set_price": None}
+        ]
+        await cb_list_trackers(callback)
+
+        callback.answer.assert_called_once()
+        callback_message.answer.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_cb_remove_follow_success():
+    callback = AsyncMock(spec=types.CallbackQuery)
+    callback.answer = AsyncMock()
+    callback.data = "remove_follow:11"
+    callback_message = AsyncMock(spec=types.Message)
+    callback_message.answer = AsyncMock()
+    callback.message = callback_message
+    user = MagicMock()
+    user.id = 321
+    callback.from_user = user
+
+    with patch('bot.handlers.db.delete_follow', new_callable=AsyncMock) as mock_delete, \
+         patch('bot.handlers.db.get_user_follows', new_callable=AsyncMock) as mock_get:
+        mock_delete.return_value = True
+        mock_get.return_value = []
+
+        await cb_remove_follow(callback)
+
+        callback.answer.assert_called_once()
+        mock_delete.assert_called_once_with(321, 11)
+        assert callback_message.answer.call_count >= 1
 
