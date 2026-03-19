@@ -23,14 +23,14 @@ async def _listen_price_dropped(sub: nats.aio.subscription.Subscription, bot: Bo
             payload = json.loads(msg.data.decode())
             product_id: int = payload["product_id"]
             new_price = Decimal(str(payload["new_price"]))
-            store_link = payload.get("store_link", "Ссылка")
+            store_link = payload.get("store_link", "unknown")
 
             rows = await queries.find_users_to_notify(product_id, new_price)    
             for row in rows:
                 text = (
-                    f"Цена на товар (ID {product_id}) снизилась!\n"
-                    f"Новая цена: {new_price} ?\n"
-                    f"Ссылка: {store_link}"
+                    f"Price dropped for product ID {product_id}!\n"
+                    f"New price: {new_price}\n"
+                    f"Link: {store_link}"
                 )
                 try:
                     await bot.send_message(chat_id=row["user_id"], text=text)   
