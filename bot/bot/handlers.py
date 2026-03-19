@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import html
 from decimal import Decimal, InvalidOperation
 
 from aiogram import F, Router, types
@@ -74,20 +75,28 @@ async def cmd_add(message: types.Message, state: FSMContext) -> None:
 # ── Command: /list & Callback list_trackers ──────────────────────────────────
 
 async def show_list(message: types.Message, user_id: int):
-    follows = await db.get_user_follows(user_id)
-    if not follows:
-        await message.answer("Tracking list is empty.")
-        return
+    try:
+        follows = await db.get_user_follows(user_id)
+        if not follows:
+            await message.answer("Tracking list is empty.")
+            return
 
-    lines = ["📋 <b>Your subscriptions:</b>\n"]
-    for i, f in enumerate(follows, start=1):
-        mode_str = "Auto 🔔" if f["mode"] == "auto" else f"Target (< {f['set_price']}) 🎯"
-        # Truncate long names
-        name = f["name"][:50] + "..." if len(f["name"]) > 50 else f["name"]
-        lines.append(f"{i}. <a href='{f['link']}'>{name}</a>\n   Mode: {mode_str}")
+        lines = ["📋 <b>Your subscriptions:</b>\n"]
+        for i, f in enumerate(follows, start=1):
+            mode_str = "Auto 🔔" if f["mode"] == "auto" else f"Target (< {f['set_price']}) 🎯"
+            # Truncate long names
+            raw_name = f["name"] or "Unknown Product"
+            safe_name = html.escape(raw_name)
+            name = safe_name[:50] + "..." if len(safe_name) > 50 else safe_name
+            link = f["link"]
+            
+            lines.append(f"{i}. <a href='{link}'>{name}</a>\n   Mode: {mode_str}")
 
-    text = "\n\n".join(lines)
-    await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
+        text = "\n\n".join(lines)
+        await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception as e:
+        log.error(f"Error showing list: {e}")
+        await message.answer("❌ Error retrieving your list. Please try again later.")
 
 
 @router.message(Command("list"))
@@ -177,6 +186,10 @@ async def on_mode_auto(callback: types.CallbackQuery, state: FSMContext) -> None
         f"✅ Product <b>{data['product_name']}</b> added to tracking (Mode: Auto).",
         parse_mode="HTML"
     )
+    await callback.message.answer(
+        "Choose an action from the menu:",
+        reply_markup=start_kb,
+    )
     await callback.answer()
 
 
@@ -217,6 +230,20 @@ async def on_price_input(message: types.Message, state: FSMContext) -> None:
     data = await state.get_data()
     pid = data["product_id"]
     name = data["product_name"]
+    current_price_str = data.get("current_price") or "0"
+    try:
+        current_price = Decimal(current_price_str)
+    except:
+        current_price = Decimal(0)
+
+    # If current price is known, prevent setting target price higher than current
+    if current_price > 0 and price >= current_price:
+        await message.answer(
+            f"❌ Target price ({price}) must be <b>lower</b> than current price ({current_price} UAH).\n"
+            "Please enter a lower price:",
+            parse_mode="HTML"
+        )
+        return
 
     await db.add_follow(message.from_user.id, pid, mode="target", set_price=price)
     await state.clear()
@@ -226,4 +253,8 @@ async def on_price_input(message: types.Message, state: FSMContext) -> None:
         f"Product: <b>{name}</b>\n"
         f"Will notify when price is below {price} UAH.",
         parse_mode="HTML"
+    )
+    await message.answer(
+        "Choose an action from the menu:",
+        reply_markup=start_kb,
     )
