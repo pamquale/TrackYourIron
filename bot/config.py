@@ -1,7 +1,7 @@
 import os
 
 
-BOT_TOKEN: str = os.environ["BOT_TOKEN"]
+BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 
 DB_DSN: str = os.getenv(
     "DB_DSN",

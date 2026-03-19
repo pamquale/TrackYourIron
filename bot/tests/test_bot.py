@@ -70,7 +70,9 @@ async def test_cmd_add():
 @pytest.mark.asyncio
 async def test_cmd_list():
     message = AsyncMock(spec=types.Message)
-    message.from_user.id = 123
+    user = MagicMock()
+    user.id = 123
+    message.from_user = user
     message.answer = AsyncMock()
 
     # Mock DB call

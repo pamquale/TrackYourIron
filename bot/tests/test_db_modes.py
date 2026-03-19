@@ -82,5 +82,7 @@ async def test_add_follow_defaults():
         args = pool.execute.call_args[0]
         assert args[1] == 123
         assert args[2] == 5
-        assert args[3] == "auto" # Default mode
-        assert args[4] is None   # Default set_price
+        assert args[3] == "Tracked Product"  # Default product_name
+        assert args[4] == ""                 # Default product_link
+        assert args[5] == "auto"             # Default mode
+        assert args[6] is None                # Default set_price
