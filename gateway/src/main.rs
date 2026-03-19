@@ -4,7 +4,8 @@ use axum::{
     Router,
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::env;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
@@ -14,30 +15,6 @@ struct AppState {
     nats_client: async_nats::Client,
 }
 
-// Incoming Telegram data structures
-#[derive(Debug, Deserialize)]
-struct TelegramUpdate {
-    message: Option<Message>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Message {
-    chat: Chat,
-    text: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Chat {
-    id: i64,
-}
-
-// Outgoing event structure for NATS
-#[derive(Debug, Serialize)]
-struct UserCommandEvent {
-    telegram_id: i64,
-    command: String,
-}
-
 #[tokio::main]
 async fn main() {
     // Initialize logger
@@ -45,13 +22,17 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    tracing::info!("Connecting to NATS...");
-    
-    // Connect to NATS (change to your local NATS address later)
-    let nats_client = async_nats::connect("demo.nats.io")
+    let nats_url = env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string());
+    let port = env::var("PORT").unwrap_or_else(|_| "8000".to_string());
+    let bind_addr = format!("0.0.0.0:{}", port);
+
+    tracing::info!("Connecting to NATS at {}...", nats_url);
+
+    // Connect to NATS
+    let nats_client = async_nats::connect(&nats_url)
         .await
         .expect("Failed to connect to NATS");
-    
+
     tracing::info!("Successfully connected to NATS broker");
 
     let state = AppState { nats_client };
@@ -64,8 +45,8 @@ async fn main() {
         .with_state(state);
 
     // Start the server
-    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    tracing::info!("Gateway server is running on http://0.0.0.0:3000");
+    tracing::info!("Gateway server is running on http://{}", bind_addr);
+    let listener = TcpListener::bind(&bind_addr).await.unwrap();
 
     axum::serve(listener, app).await.unwrap();
 }
@@ -73,33 +54,17 @@ async fn main() {
 // Webhook handler logic
 async fn handle_telegram_webhook(
     State(state): State<AppState>,
-    Json(update): Json<TelegramUpdate>,
+    Json(update): Json<Value>,
 ) -> &'static str {
+    tracing::info!("Received webhook update");
     
-    // Check if the update contains a message and text
-    if let Some(msg) = update.message {
-        let user_id = msg.chat.id;
-        
-        if let Some(text) = msg.text {
-            tracing::info!("Received command: '{}' from user ID: {}", text, user_id);
-            
-            // 1. Create event
-            let event = UserCommandEvent {
-                telegram_id: user_id,
-                command: text,
-            };
-
-            // 2. Serialize event to JSON bytes
-            let payload = serde_json::to_vec(&event).unwrap();
-
-            // 3. Publish event to NATS topic
-            match state.nats_client.publish("events.user_command", payload.into()).await {
-                Ok(_) => tracing::info!("Event successfully published to NATS"),
-                Err(e) => tracing::error!("Failed to publish to NATS: {}", e),
-            }
-        }
+    // Forward the entire raw update to NATS for the bot
+    let payload = serde_json::to_vec(&update).unwrap();
+    match state.nats_client.publish("events.telegram_update", payload.into()).await {
+        Ok(_) => tracing::info!("Update successfully published to NATS"),
+        Err(e) => tracing::error!("Failed to publish to NATS: {}", e),
     }
-    
+
     // Always return 200 OK to Telegram
     "OK"
 }

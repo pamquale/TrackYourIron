@@ -13,28 +13,28 @@ from services.nats_consumer import start_consumer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger(__name__)
 
-
 async def main() -> None:
     bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher()
     dp.include_router(router)
 
-    # Инициализируем connection pool при старте
     await get_pool()
     log.info("Database pool initialized")
 
-    # Запускаем NATS-консьюмер как фоновую задачу
-    nats_task = asyncio.create_task(start_consumer(bot))
+    # Start NATS-consumer
+    nats_task = asyncio.create_task(start_consumer(bot, dp))
     log.info("NATS consumer started")
 
     try:
-        await dp.start_polling(bot)
+        # Keep process alive instead of polling Telegram directly.
+        # This properly fulfills Event-Driven Architecture, relying on Gateway.
+        log.info("Bot is running in Event-Driven mode (listening via NATS).")
+        await asyncio.Event().wait()
     finally:
         nats_task.cancel()
         await close_pool()
         await bot.session.close()
         log.info("Shutdown complete")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

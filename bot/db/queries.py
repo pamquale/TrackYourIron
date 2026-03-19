@@ -7,15 +7,14 @@ import asyncpg
 from db.pool import get_pool
 
 
-async def upsert_user(telegram_id: int, name: str | None = None) -> None:
-    """Регистрация пользователя (INSERT ... ON CONFLICT — идемпотентно)."""
+async def upsert_user(telegram_id: int, name: str | None = None) -> None:       
     pool = await get_pool()
     await pool.execute(
-        """
-        INSERT INTO users (telegram_id, name)
+        "`"`"
+        INSERT INTO notifier_db.users (telegram_id, name)
         VALUES ($1, $2)
         ON CONFLICT (telegram_id) DO NOTHING
-        """,
+        "`"`",
         telegram_id,
         name,
     )
@@ -24,20 +23,27 @@ async def upsert_user(telegram_id: int, name: str | None = None) -> None:
 async def add_follow(
     user_id: int,
     product_id: int,
+    product_name: str,
+    product_link: str,
     mode: str = "auto",
     set_price: Decimal | None = None,
 ) -> None:
-    """Добавление подписки на товар."""
     pool = await get_pool()
     await pool.execute(
-        """
-        INSERT INTO follows (user_id, product_id, mode, set_price)
-        VALUES ($1, $2, $3, $4)
+        "`"`"
+        INSERT INTO notifier_db.follows (user_id, product_id, product_name, product_link, mode, set_price)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (user_id, product_id)
-        DO UPDATE SET mode = EXCLUDED.mode, set_price = EXCLUDED.set_price
-        """,
+        DO UPDATE SET 
+            mode = EXCLUDED.mode, 
+            set_price = EXCLUDED.set_price,
+            product_name = EXCLUDED.product_name,
+            product_link = EXCLUDED.product_link
+        "`"`",
         user_id,
         product_id,
+        product_name,
+        product_link,
         mode,
         set_price,
     )
@@ -47,19 +53,14 @@ async def find_users_to_notify(
     product_id: int,
     new_price: Decimal,
 ) -> list[asyncpg.Record]:
-    """
-    Поиск подписчиков, которых нужно уведомить:
-      - mode = 'auto'  → уведомляем при любом изменении цены
-      - mode = 'target' → уведомляем, только если new_price <= set_price
-    """
     pool = await get_pool()
     rows = await pool.fetch(
-        """
+        "`"`"
         SELECT f.user_id, f.mode, f.set_price
-        FROM follows f
+        FROM notifier_db.follows f
         WHERE f.product_id = $1
-          AND (f.mode = 'auto' OR (f.mode = 'target' AND f.set_price >= $2))
-        """,
+          AND (f.mode = 'auto' OR (f.mode = 'target' AND f.set_price >= $2))    
+        "`"`",
         product_id,
         new_price,
     )
@@ -67,26 +68,23 @@ async def find_users_to_notify(
 
 
 async def get_user_follows(user_id: int) -> list[asyncpg.Record]:
-    """Список всех отслеживаемых товаров пользователя."""
     pool = await get_pool()
     return await pool.fetch(
-        """
-        SELECT p.name, p.link, f.mode, f.set_price
-        FROM follows f
-        JOIN products p ON f.product_id = p.id
+        "`"`"
+        SELECT f.product_name as name, f.product_link as link, f.mode, f.set_price
+        FROM notifier_db.follows f
         WHERE f.user_id = $1
-        ORDER BY p.name ASC
-        """,
+        ORDER BY f.product_name ASC
+        "`"`",
         user_id,
     )
 
 
 async def check_follow_exists(user_id: int, product_id: int) -> bool:
-    """Проверка наличия подписки."""
     pool = await get_pool()
     val = await pool.fetchval(
-        "SELECT 1 FROM follows WHERE user_id = $1 AND product_id = $2",
+        "SELECT 1 FROM notifier_db.follows WHERE user_id = $1 AND product_id = $2",
         user_id,
         product_id,
     )
-    return val is not None
+    return bool(val)
