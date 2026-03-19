@@ -23,6 +23,27 @@ pub async fn add_product(
     link: &str,
     price: f64
 ) -> Result<i32, sqlx::Error> {
+    // Check if product already exists
+    let existing: Option<(i32,)> = sqlx::query_as(
+        "SELECT id FROM products WHERE link = $1"
+    )
+    .bind(link)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some((id,)) = existing {
+        // Update price
+        sqlx::query(
+            "UPDATE products SET price = $1, name = $2 WHERE id = $3"
+        )
+        .bind(price)
+        .bind(name)
+        .bind(id)
+        .execute(pool)
+        .await?;
+        return Ok(id);
+    }
+
     let rec: (i32,) = sqlx::query_as(
         "INSERT INTO products (name, link, price) VALUES ($1, $2, $3) RETURNING id"
     )

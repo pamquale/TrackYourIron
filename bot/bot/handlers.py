@@ -83,7 +83,11 @@ async def show_list(message: types.Message, user_id: int):
 
         lines = ["📋 <b>Your subscriptions:</b>\n"]
         for i, f in enumerate(follows, start=1):
-            mode_str = "Auto 🔔" if f["mode"] == "auto" else f"Target (< {f['set_price']}) 🎯"
+            if f["mode"] == "auto":
+                mode_str = "Auto 🔔"
+            else:
+                mode_str = f"Target (&lt; {f['set_price']}) 🎯"
+            
             # Truncate long names
             raw_name = f["name"] or "Unknown Product"
             safe_name = html.escape(raw_name)

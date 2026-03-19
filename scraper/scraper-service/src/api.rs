@@ -25,6 +25,7 @@ pub struct AddProductRequest {
 pub struct AddProductResponse {
     pub id: i32,
     pub current_price: f64,
+    pub name: String,
 }
 
 pub fn create_router(pool: PgPool) -> Router {
@@ -49,7 +50,7 @@ async fn add_product(
         }
     };
 
-    // Add to Database
+    // Add to Database (or fetch existing)
     match db::add_product(
         &state.pool,
         &product_data.name,
@@ -57,10 +58,11 @@ async fn add_product(
         product_data.price
     ).await {
         Ok(id) => {
-            println!("Successfully added product id: {}", id);
+            println!("Successfully processed product id: {}", id);
             let response = AddProductResponse {
                 id,
                 current_price: product_data.price,
+                name: product_data.name.clone(),
             };
             (StatusCode::OK, Json(response)).into_response()
         }
