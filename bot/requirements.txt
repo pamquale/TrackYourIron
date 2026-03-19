@@ -1,0 +1,6 @@
+aiogram
+asyncpg
+aiohttp
+nats-py
+pytest
+pytest-asyncio

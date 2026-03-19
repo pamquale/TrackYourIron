@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secretpassword}
+      POSTGRES_DB: ${DB_NAME:-iron_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  nats:
+    image: nats:alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  bot:
+    build: 
+      context: ./bot
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      DB_DSN: "postgresql://${DB_USER:-admin}:${DB_PASSWORD:-secretpassword}@db:5432/${DB_NAME:-iron_db}"
+      NATS_URL: "nats://nats:4222"
+      SCRAPER_BASE_URL: "http://scraper:3000"
+    depends_on:
+      - db
+      - nats
+      - scraper
+
+  scraper:
+    build:
+      context: ./scraper/scraper-service
+    environment:
+      DATABASE_URL: "postgresql://${DB_USER:-admin}:${DB_PASSWORD:-secretpassword}@db:5432/${DB_NAME:-iron_db}"
+      NATS_URL: "nats://nats:4222"
+      PARSER_URL: "http://scraper-parser:8080"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+      - nats
+      - scraper-parser
+
+  scraper-parser:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile.parser
+    ports:
+      - "8080:8080"
+      
+  gateway:
+    build:
+      context: ./gateway
+    environment:
+      NATS_URL: "nats://nats:4222"
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - nats
+
+volumes:
+  db-data:

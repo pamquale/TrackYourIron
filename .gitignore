@@ -1,0 +1,45 @@
+# General
+.DS_Store
+Thumbs.db
+*.log
+tmp*
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Rust
+target/
+**/*.rs.bk
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Docker
+docker-compose.override.yml
+
+# Project specific
+backend/venv
+frontend/node_modules
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/

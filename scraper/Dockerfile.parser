@@ -1,0 +1,7 @@
+FROM node:20-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm install && npx playwright install --with-deps chromium
+COPY parser_server.js .
+EXPOSE 8080
+CMD ["node", "parser_server.js"]
