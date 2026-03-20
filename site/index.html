@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrackYourIron Live Events</title>
+  <style>
+    :root {
+      --bg: #0a1016;
+      --panel: #111b24;
+      --panel-2: #152434;
+      --text: #d8e3ef;
+      --muted: #8da3b8;
+      --line: #284055;
+      --accent: #1ec28b;
+      --warn: #ffcc66;
+      --active: #3ea2ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 10%, rgba(62,162,255,0.10), transparent 25%),
+        radial-gradient(circle at 90% 80%, rgba(30,194,139,0.12), transparent 30%),
+        var(--bg);
+      font: 15px/1.45 "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font: 700 28px/1.2 "IBM Plex Mono", monospace;
+      letter-spacing: .4px;
+    }
+
+    .sub {
+      margin: 0 0 16px;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1.5fr 1fr;
+    }
+
+    .panel {
+      background: linear-gradient(160deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .stats {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .stat {
+      min-width: 150px;
+      background: rgba(0,0,0,.2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .k { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+    .v { font: 700 21px/1.2 "IBM Plex Mono", monospace; }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      align-items: stretch;
+      margin-bottom: 12px;
+    }
+
+    .node {
+      text-align: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 8px;
+      color: var(--muted);
+      background: rgba(0,0,0,.18);
+      transition: all .25s ease;
+      position: relative;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+
+    .node.active {
+      color: #fff;
+      border-color: var(--active);
+      box-shadow: 0 0 0 1px rgba(62,162,255,.35), 0 0 18px rgba(62,162,255,.25);
+      transform: translateY(-2px);
+    }
+
+    .flow-id {
+      font: 600 13px/1.2 "IBM Plex Mono", monospace;
+      color: var(--warn);
+      min-height: 18px;
+      margin-bottom: 10px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .event-log {
+      max-height: 320px;
+      overflow: auto;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 13px;
+      line-height: 1.4;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(0,0,0,.2);
+      padding: 10px;
+      white-space: pre-wrap;
+    }
+
+    .event-item {
+      border-bottom: 1px solid var(--line);
+      padding: 8px 0;
+    }
+
+    .event-item:last-child {
+      border-bottom: none;
+    }
+
+    .event-subject {
+      color: var(--warn);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    @media (max-width: 940px) {
+      .grid { grid-template-columns: 1fr; }
+      .pipeline { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Live Event Flow</h1>
+    <p class="sub">Shows only real events from NATS subjects events.price_dropped and events.telegram_update.</p>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="stats">
+          <div class="stat"><div class="k">Service</div><div class="v">site</div></div>
+          <div class="stat"><div class="k">Refresh</div><div class="v">1s</div></div>
+          <div class="stat"><div class="k">Events</div><div class="v" id="count">0</div></div>
+        </div>
+
+        <div class="flow-id" id="flowId">waiting for real events...</div>
+        <div class="pipeline" id="pipeline">
+          <div class="node" data-step="0">Producer</div>
+          <div class="node" data-step="1">NATS</div>
+          <div class="node" data-step="2">Consumer</div>
+          <div class="node" data-step="3">Bot</div>
+          <div class="node" data-step="4">User</div>
+        </div>
+        <div class="hint">No fake data. If there are no events, the page stays idle.</div>
+      </section>
+
+      <section class="panel">
+        <div class="event-log" id="log"></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const nodes = [...document.querySelectorAll('.node')];
+    const log = document.getElementById('log');
+    const flowId = document.getElementById('flowId');
+    const countEl = document.getElementById('count');
+    let lastSeenId = 0;
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function animateFlow() {
+      nodes.forEach(n => n.classList.remove('active'));
+      for (const node of nodes) {
+        node.classList.add('active');
+        await sleep(220);
+        node.classList.remove('active');
+      }
+    }
+
+    function eventHtml(e) {
+      const body = JSON.stringify(e.payload, null, 2);
+      return `<div class="event-item">
+        <div class="event-subject">${e.subject}</div>
+        <div>[${e.timestamp}] id=${e.id}</div>
+        <div>${body}</div>
+      </div>`;
+    }
+
+    async function tick() {
+      try {
+        const res = await fetch('/events?limit=50', { cache: 'no-store' });
+        if (!res.ok) return;
+        const events = await res.json();
+
+        countEl.textContent = String(events.length);
+        if (!events.length) {
+          flowId.textContent = 'waiting for real events...';
+          log.innerHTML = '<div class="event-item">No events yet.</div>';
+          return;
+        }
+
+        const latest = events[0];
+        flowId.textContent = `latest: ${latest.subject} (id=${latest.id})`;
+        if (latest.id > lastSeenId) {
+          lastSeenId = latest.id;
+          await animateFlow();
+        }
+
+        log.innerHTML = events.map(eventHtml).join('');
+      } catch (_) {
+      }
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>

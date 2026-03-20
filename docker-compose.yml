@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:15-alpine
@@ -9,9 +7,30 @@ services:
       POSTGRES_DB: ${DB_NAME:-iron_db}
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-iron_db}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     volumes:
       - db-data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  init-db:
+    image: postgres:15-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-secretpassword}
+    volumes:
+      - ./init.sql:/init.sql:ro
+    command: [
+      "sh",
+      "-c",
+      "psql -h db -U ${DB_USER:-admin} -d ${DB_NAME:-iron_db} -f /init.sql"
+    ]
+    restart: "no"
 
   nats:
     image: nats:alpine
@@ -28,9 +47,12 @@ services:
       NATS_URL: "nats://nats:4222"
       SCRAPER_BASE_URL: "http://scraper:3000"
     depends_on:
-      - db
-      - nats
-      - scraper
+      init-db:
+        condition: service_completed_successfully
+      nats:
+        condition: service_started
+      scraper:
+        condition: service_started
 
   scraper:
     build:
@@ -42,9 +64,12 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - db
-      - nats
-      - scraper-parser
+      init-db:
+        condition: service_completed_successfully
+      nats:
+        condition: service_started
+      scraper-parser:
+        condition: service_started
 
   scraper-parser:
     build:
@@ -62,7 +87,19 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - nats
+      nats:
+        condition: service_started
+
+  site:
+    build:
+      context: ./site
+    environment:
+      NATS_URL: "nats://nats:4222"
+    ports:
+      - "8085:80"
+    depends_on:
+      nats:
+        condition: service_started
 
 volumes:
   db-data:
