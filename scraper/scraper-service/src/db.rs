@@ -11,7 +11,7 @@ pub struct Product {
 
 pub async fn get_all_products(pool: &PgPool) -> Result<Vec<Product>, sqlx::Error> {
     sqlx::query_as::<_, Product>(
-        "SELECT id, name, link, price FROM scraper_db.products"
+        "SELECT id, name, link, price::float8 AS price FROM scraper_db.products"
     )
     .fetch_all(pool)
     .await
